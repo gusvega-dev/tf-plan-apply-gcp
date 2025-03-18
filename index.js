@@ -4,7 +4,6 @@ const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process'); // Use execSync for capturing output
 
-
 /**
  * Sets up the working directory based on user input.
  */
@@ -98,26 +97,27 @@ async function runTerraform() {
     }
 
     // Read and parse the JSON output
+    let changesCount = 0;
     if (fs.existsSync(jsonOutputPath)) {
         const tfJson = JSON.parse(fs.readFileSync(jsonOutputPath, 'utf8'));
-    
+
         // Extract all resource changes
         const changes = tfJson.resource_changes ? tfJson.resource_changes.filter(change => change.change.actions.length > 0) : [];
-        const changesCount = changes.length;
-    
+        changesCount = changes.length;
+
         // Categorize resources by action type
         const changeCategories = {
             create: [],
             update: [],
             delete: []
         };
-    
+
         // Function to format attributes with proper indentation (recursive for nested attributes)
         function formatAttributes(attributes, indentLevel = 2) {
             return Object.entries(attributes)
                 .map(([key, value]) => {
                     const indent = " ".repeat(indentLevel); // Create indentation
-                    
+
                     if (typeof value === "object" && value !== null && !Array.isArray(value)) {
                         // ✅ Expand nested attributes with additional indentation
                         return `${indent}- ${key}:\n` + formatAttributes(value, indentLevel + 2);
@@ -127,68 +127,69 @@ async function runTerraform() {
                 })
                 .join("\n");
         }
-    
+
         changes.forEach(change => {
             const address = change.address; // Full resource path
             const actions = change.change.actions; // Array of actions (["create"], ["update"], ["delete"])
-    
+
             // Extract attributes and format them properly
             const attributes = change.change.after || {};
             const formattedAttributes = formatAttributes(attributes, 8); // Start indentation at 8 spaces
-    
+
             actions.forEach(action => {
                 if (changeCategories[action]) {
                     changeCategories[action].push({ address, formattedAttributes });
                 }
             });
         });
-    
+
         // ✅ Now, count the number of each type **after** populating the categories
         const createCount = changeCategories.create.length;
         const updateCount = changeCategories.update.length;
         const deleteCount = changeCategories.delete.length;
-    
+
         // Print summary
         console.log("🔄 Terraform Plan Changes:");
         console.log(`🔍 Found ${changesCount} resource changes.`);
         console.log(" ");
         console.log(`CREATE: ${createCount} | UPDATE: ${updateCount} | DELETE: ${deleteCount}\n`);
-    
+
         // Define display order
         const actionLabels = {
             create: "CREATE",
             update: "UPDATE",
             delete: "DELETE"
         };
-    
+
         ["create", "update", "delete"].forEach(action => {
             if (changeCategories[action].length > 0) {
                 console.log(`${actionLabels[action]}:`);
-    
+
                 changeCategories[action].forEach(resource => {
                     // ✅ Resource is collapsible
                     console.log(`::group::${resource.address}`);
                     console.log(resource.formattedAttributes); // Properly formatted key-value attributes
                     console.log("::endgroup::");
                 });
-    
+
                 console.log(""); // Add empty line for spacing
             }
         });
-    
+
         // Set GitHub Actions outputs
         core.setOutput("resources_changed", changesCount);
         core.setOutput("change_details", JSON.stringify(changeCategories));
 
-        console.log("🚀 **Applying Terraform changes...**");
+        // Check if we need to apply
         if (changesCount === 0) {
             console.log("✅ No changes detected. Skipping Terraform Apply.");
             core.setOutput("apply_status", "skipped");
+            return;
         } else {
             console.log("🚀 **Applying Terraform changes...**");
             try {
                 console.log("::group::Terraform Apply");
-                await exec.exec('terraform apply tfplan');
+                await exec.exec('terraform apply -auto-approve');
                 console.log("✅ Terraform Apply completed successfully.");
                 console.log("::endgroup::");
                 core.setOutput("apply_status", "success");
@@ -197,11 +198,10 @@ async function runTerraform() {
                 return;
             }
         }
-    
-        core.setOutput("apply_status", "success");
     } else {
         console.log("⚠️ No Terraform JSON output found.");
         core.setOutput("resources_changed", 0);
+        core.setOutput("apply_status", "skipped");
     }
 
     core.setOutput("plan_status", "success");

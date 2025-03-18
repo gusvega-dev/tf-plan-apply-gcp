@@ -45,7 +45,7 @@
 ### Example: Passing Multiple Secrets
 ```yaml
 - name: Run Terraform Plan & Apply
-  uses: gusvega-dev/tf-plan-apply-gcp@v1.1.0
+  uses: gusvega-dev/tf-plan-apply-gcp@v1.0.0
   env:
     GOOGLE_APPLICATION_CREDENTIALS: "${{ secrets.GCP_CREDENTIALS }}"
   with:
@@ -135,7 +135,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Run Terraform Plan & Apply
-        uses: gusvega-dev/tf-plan-apply-gcp@v1.1.0
+        uses: gusvega-dev/tf-plan-apply-gcp@v1.0.0
         with:
           workdir: "./terraform"
           secrets: '{"project_id":"${{ secrets.PROJECT_ID }}", "api_key":"${{ secrets.API_KEY }}"}'
