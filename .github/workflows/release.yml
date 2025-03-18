@@ -27,16 +27,19 @@ jobs:
         run: |
           echo "🔍 Fetching existing package versions..."
 
-          # Fetch package versions
+          # Fetch package versions safely
           VERSIONS_JSON=$(gh api \
             -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
             -H "Accept: application/vnd.github.v3+json" \
-            https://api.github.com/user/packages/container/tf-plan-apply-gcp/versions 2>/dev/null)
+            https://api.github.com/user/packages/container/tf-plan-apply-gcp/versions 2>/dev/null || echo "error")
 
-          # Count total versions
-          VERSION_COUNT=$(echo "$VERSIONS_JSON" | jq length)
+          # Ensure valid JSON response
+          if [[ "$VERSIONS_JSON" == "error" || -z "$VERSIONS_JSON" ]]; then
+            echo "⚠️ No package versions found or failed to retrieve package information."
+            exit 0  # Don't fail workflow if package doesn't exist
+          fi
 
-          # Find the version ID to delete
+          # Extract all version IDs
           VERSION_ID=$(echo "$VERSIONS_JSON" | jq -r '
             if type=="array" then 
               .[] | select(.metadata.container.tags[]? | contains("'"$VERSION"'")) | .id 
@@ -44,23 +47,27 @@ jobs:
               empty 
             end')
 
-          # If the version exists and is not the last one, delete it
-          if [ -n "$VERSION_ID" ]; then
-            if [ "$VERSION_COUNT" -gt 1 ]; then
-              echo "🗑️ Deleting old version $VERSION ($VERSION_ID)"
+          # Get total number of package versions
+          VERSION_COUNT=$(echo "$VERSIONS_JSON" | jq 'length')
+
+          if [[ -n "$VERSION_ID" ]]; then
+            if [[ "$VERSION_COUNT" -gt 1 ]]; then
+              echo "🗑️ Deleting old version $VERSION (ID: $VERSION_ID)..."
               gh api --method DELETE \
                 -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-                https://api.github.com/user/packages/container/tf-plan-apply-gcp/versions/$VERSION_ID || echo "⚠️ Warning: Failed to delete version but continuing..."
+                https://api.github.com/user/packages/container/tf-plan-apply-gcp/versions/$VERSION_ID || \
+                echo "⚠️ Warning: Failed to delete version but continuing..."
             else
               echo "⚠️ Cannot delete the last tagged version ($VERSION). Consider deleting the entire package instead."
             fi
           else
-            echo "✅ No existing version found for $VERSION"
+            echo "✅ No existing version found for $VERSION."
           fi
 
           echo "🚀 Proceeding with the rest of the workflow..."
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
 
 
       - name: Build and Tag Docker Image
