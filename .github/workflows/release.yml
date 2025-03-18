@@ -28,19 +28,19 @@ jobs:
           echo "🔍 Fetching existing package versions..."
 
           # Fetch package versions safely
-          VERSIONS_JSON=$(gh api \
+          RESPONSE=$(gh api \
             -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
             -H "Accept: application/vnd.github.v3+json" \
             https://api.github.com/user/packages/container/tf-plan-apply-gcp/versions 2>/dev/null || echo "error")
 
-          # Ensure valid JSON response
-          if [[ "$VERSIONS_JSON" == "error" || -z "$VERSIONS_JSON" ]]; then
-            echo "⚠️ No package versions found or failed to retrieve package information."
-            exit 0  # Don't fail workflow if package doesn't exist
+          # Ensure response is valid JSON
+          if ! echo "$RESPONSE" | jq empty 2>/dev/null; then
+            echo "⚠️ Invalid JSON response. This might mean the package does not exist or there was an API error."
+            exit 0  # Do not fail workflow
           fi
 
-          # Extract all version IDs
-          VERSION_ID=$(echo "$VERSIONS_JSON" | jq -r '
+          # Extract version IDs safely
+          VERSION_ID=$(echo "$RESPONSE" | jq -r '
             if type=="array" then 
               .[] | select(.metadata.container.tags[]? | contains("'"$VERSION"'")) | .id 
             else 
@@ -48,7 +48,7 @@ jobs:
             end')
 
           # Get total number of package versions
-          VERSION_COUNT=$(echo "$VERSIONS_JSON" | jq 'length')
+          VERSION_COUNT=$(echo "$RESPONSE" | jq 'length')
 
           if [[ -n "$VERSION_ID" ]]; then
             if [[ "$VERSION_COUNT" -gt 1 ]]; then
@@ -67,6 +67,7 @@ jobs:
           echo "🚀 Proceeding with the rest of the workflow..."
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
 
 
 
