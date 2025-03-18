@@ -1,0 +1,24 @@
+name: "Terraform Plan GCP Action"
+description: "Executes Terraform Plan inside a container"
+author: "gusvega"
+branding:
+  icon: "cloud"
+  color: "red"
+
+inputs:
+  workdir:
+    description: "Working directory for Terraform"
+    required: false
+    default: "."
+  secrets:
+    description: "JSON string containing secrets"
+    required: false
+    default: "{}"
+
+outputs:
+  plan-apply_status:
+    description: "Terraform Plan execution status"
+
+runs:
+  using: "docker"
+  image: "docker://ghcr.io/gusvega-dev/tf-plan-apply-gcp:v1.0.0"

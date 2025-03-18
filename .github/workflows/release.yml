@@ -1,0 +1,77 @@
+name: Publish Containerized GitHub Action to GHCR
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  IMAGE_NAME: ghcr.io/gusvega-dev/tf-plan-apply-gcp
+  VERSION: 'v1.0.0'
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write  # Required for pushing to GHCR
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry (GHCR)
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u $GITHUB_ACTOR --password-stdin
+
+      - name: Delete Existing Version (if exists)
+        run: |
+          echo "🔍 Fetching existing package versions..."
+
+          # Fetch package versions
+          VERSIONS_JSON=$(gh api \
+            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            https://api.github.com/user/packages/container/tf-plan-apply-gcp/versions 2>/dev/null)
+
+          # Count total versions
+          VERSION_COUNT=$(echo "$VERSIONS_JSON" | jq length)
+
+          # Find the version ID to delete
+          VERSION_ID=$(echo "$VERSIONS_JSON" | jq -r '
+            if type=="array" then 
+              .[] | select(.metadata.container.tags[]? | contains("'"$VERSION"'")) | .id 
+            else 
+              empty 
+            end')
+
+          # If the version exists and is not the last one, delete it
+          if [ -n "$VERSION_ID" ]; then
+            if [ "$VERSION_COUNT" -gt 1 ]; then
+              echo "🗑️ Deleting old version $VERSION ($VERSION_ID)"
+              gh api --method DELETE \
+                -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+                https://api.github.com/user/packages/container/tf-plan-apply-gcp/versions/$VERSION_ID || echo "⚠️ Warning: Failed to delete version but continuing..."
+            else
+              echo "⚠️ Cannot delete the last tagged version ($VERSION). Consider deleting the entire package instead."
+            fi
+          else
+            echo "✅ No existing version found for $VERSION"
+          fi
+
+          echo "🚀 Proceeding with the rest of the workflow..."
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+
+      - name: Build and Tag Docker Image
+        run: |
+          docker build -t $IMAGE_NAME:$VERSION .
+
+      - name: Push Docker Image to GHCR
+        run: |
+          docker push $IMAGE_NAME:$VERSION
+
+      - name: Create and Push GitHub Tag
+        run: |
+          git tag -f $VERSION
+          git push origin -f $VERSION
