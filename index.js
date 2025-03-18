@@ -181,14 +181,21 @@ async function runTerraform() {
         core.setOutput("change_details", JSON.stringify(changeCategories));
 
         console.log("🚀 **Applying Terraform changes...**");
-        try {
-            console.log("::group::Terraform Apply");
-            await exec.exec('terraform apply tfplan');
-            console.log("✅ Terraform Apply completed successfully.");
-            console.log("::endgroup::");
-        } catch (error) {
-            core.setFailed(`❌ Terraform Apply failed: ${error.message}`);
-            return;
+        if (changesCount === 0) {
+            console.log("✅ No changes detected. Skipping Terraform Apply.");
+            core.setOutput("apply_status", "skipped");
+        } else {
+            console.log("🚀 **Applying Terraform changes...**");
+            try {
+                console.log("::group::Terraform Apply");
+                await exec.exec('terraform apply tfplan');
+                console.log("✅ Terraform Apply completed successfully.");
+                console.log("::endgroup::");
+                core.setOutput("apply_status", "success");
+            } catch (error) {
+                core.setFailed(`❌ Terraform Apply failed: ${error.message}`);
+                return;
+            }
         }
     
         core.setOutput("apply_status", "success");
