@@ -1,24 +1,25 @@
 # Terraform Plan + Apply GCP Action (`tf-plan-apply-gcp`)
 
-`tf-plan-gcp` is a GitHub Action that runs `terraform plan` inside a containerized environment. It helps execute Terraform plan operations with structured and collapsible output formatting, ensuring seamless integration with Google Cloud workflows.
+`tf-plan-apply-gcp` is a GitHub Action that runs `terraform plan` and `terraform apply` inside a containerized environment. It ensures seamless integration with Google Cloud workflows by executing Terraform operations securely and efficiently.
 
 ---
 
 ## Features
-- Containerized Execution → Runs inside a prebuilt Docker container with Terraform installed.
-- Automatic Directory Handling → Works within your Terraform directory without manual setup.
-- Collapsible Terraform Output → Groups resource changes for better readability in GitHub logs.
-- Google Cloud Credentials & Secrets Handling → Reads authentication and Terraform secrets securely from GitHub Secrets.
-- Flexible Secret Passing → Pass multiple secrets as an object and access them dynamically in Terraform.
-- Works on Any GitHub Runner → No dependency issues—run Terraform anywhere.
+- **Containerized Execution** → Runs inside a prebuilt Docker container with Terraform installed.
+- **Automatic Directory Handling** → Works within your Terraform directory without manual setup.
+- **Structured Terraform Output** → Formats changes for better readability in GitHub logs.
+- **Google Cloud Credentials & Secrets Handling** → Reads authentication and Terraform secrets securely from GitHub Secrets.
+- **Flexible Secret Passing** → Pass multiple secrets as an object and access them dynamically in Terraform.
+- **Works on Any GitHub Runner** → No dependency issues—run Terraform anywhere.
+- **Intelligent Apply Handling** → Skips `terraform apply` if no changes are detected.
 
 ---
 
 ## Usage
 ### Basic Example
 ```yaml
-- name: Run Terraform Plan
-  uses: gusvega-dev/tf-plan-gcp@v1.1.0
+- name: Run Terraform Plan & Apply
+  uses: gusvega-dev/tf-plan-apply-gcp@v1.1.0
   env:
     GOOGLE_APPLICATION_CREDENTIALS: "${{ secrets.GCP_CREDENTIALS }}"
   with:
@@ -31,6 +32,7 @@
 - Uses Google Cloud credentials from GitHub Secrets.
 - Passes Terraform secrets dynamically as an object.
 - Displays structured Terraform logs inside GitHub Actions.
+- **Skips apply if no changes are detected.**
 
 ---
 
@@ -42,8 +44,8 @@
 
 ### Example: Passing Multiple Secrets
 ```yaml
-- name: Run Terraform Plan
-  uses: gusvega-dev/tf-plan-gcp@v1.1.0
+- name: Run Terraform Plan & Apply
+  uses: gusvega-dev/tf-plan-apply-gcp@v1.1.0
   env:
     GOOGLE_APPLICATION_CREDENTIALS: "${{ secrets.GCP_CREDENTIALS }}"
   with:
@@ -54,10 +56,9 @@
 ---
 
 ## Using Secrets in Terraform
-The secrets passed to the action are automatically available in Terraform as environment variables prefixed with `TF_VAR_` - for example :
+The secrets passed to the action are automatically available in Terraform as environment variables prefixed with `TF_VAR_`.
 
 ### Defining Secrets in Terraform (`variables.tf`)
-Create a `variables.tf` file to define the secrets:
 ```hcl
 variable "secrets" {
   type = map(string)
@@ -65,7 +66,6 @@ variable "secrets" {
 ```
 
 ### Accessing Secrets in Terraform (`main.tf`)
-The secrets can be accessed in Terraform using:
 ```hcl
 provider "google" {
   project = var.secrets["project_id"]
@@ -76,45 +76,33 @@ resource "some_resource" "example" {
 }
 ```
 
-### Outputting Secrets in Terraform (`outputs.tf`)
-You can also output specific secrets for debugging purposes:
-```hcl
-output "project_id" {
-  value = var.secrets["project_id"]
-  sensitive = true
-}
-```
-
-This allows Terraform to use the secrets securely without exposing them in the configuration files.
-
 ---
 
 ## Outputs
-| Name          | Description |
-|--------------|-------------|
+| Name           | Description |
+|---------------|-------------|
 | `plan_status` | The status of the Terraform Plan execution. |
+| `apply_status` | The status of the Terraform Apply execution (or `skipped` if no changes). |
 
 ---
 
-## How the Container Handles Directories
-GitHub Actions automatically mounts the repository into `/github/workspace` inside the container. Any files created there persist between different steps in the workflow.
+## Handling Directory Structure
+GitHub Actions automatically mounts the repository into `/github/workspace` inside the container.
 
-- Inside the container, the Terraform directory is set as:
+- Terraform directory is set as:
   ```sh
   /github/workspace/terraform
   ```
-- The action automatically switches to this directory, so Terraform commands run in the expected location.
+- The action automatically switches to this directory.
 
 ---
 
 ## Example: Repository Structure
-Below is a recommended structure for using this action within a repository:
-
 ```
 repo-root/
 │── .github/
 │   ├── workflows/
-│   │   ├── terraform-plan.yml  # GitHub Action Workflow
+│   │   ├── terraform-plan-apply.yml  # GitHub Action Workflow
 │── terraform/
 │   ├── main.tf                 # Terraform Configuration
 │   ├── variables.tf            # Variables File
@@ -126,7 +114,7 @@ repo-root/
 ---
 
 ## Full Terraform Workflow Example
-This is a complete Terraform CI/CD pipeline using `tf-plan-gcp`:
+This is a complete Terraform CI/CD pipeline using `tf-plan-apply-gcp`:
 
 ```yaml
 name: Terraform CI
@@ -140,35 +128,37 @@ env:
   GOOGLE_APPLICATION_CREDENTIALS: "${{ secrets.GCP_CREDENTIALS }}"
 
 jobs:
-  terraform-plan:
+  terraform-plan-apply:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Run Terraform Plan
-        uses: gusvega-dev/tf-plan-gcp@v1.1.0
+      - name: Run Terraform Plan & Apply
+        uses: gusvega-dev/tf-plan-apply-gcp@v1.1.0
         with:
           workdir: "./terraform"
           secrets: '{"project_id":"${{ secrets.PROJECT_ID }}", "api_key":"${{ secrets.API_KEY }}"}'
 ```
 
 ### What This Does
-- Automatically runs Terraform Plan when pushing to `main`.
+- Automatically runs Terraform Plan & Apply when pushing to `main`.
 - Ensures the Terraform directory is set correctly.
 - Uses Google Cloud credentials for authentication.
 - Passes secrets from GitHub Workflows to be used within Terraform.
+- Skips apply if no changes exist.
 
 ---
 
 ## Comparison vs. HashiCorp Terraform Action
-| Feature                     | `tf-plan-gcp` (This Action) | HashiCorp Action |
+| Feature                     | `tf-plan-apply-gcp` (This Action) | HashiCorp Action |
 |-----------------------------|----------------------|------------------|
 | Requires Terraform Install  | No (Containerized) | Yes |
 | Native GCP Support          | Yes | No |
 | Flexible Secret Handling    | Yes (JSON object) | No |
 | Structured Terraform Logs   | Yes | No |
 | Works on Any GitHub Runner  | Yes | No (Requires Terraform Installed) |
+| Skips Apply If No Changes   | Yes | No |
 
 ---
 
@@ -176,7 +166,10 @@ jobs:
 ### Terraform Plan Fails
 Check the logs for errors:
 1. Check for syntax issues in your Terraform files.
-2. Verify Google Cloud credentials are correctly set in the GOOGLE_APPLICATION_CREDENTIALS environment variable.
+2. Verify Google Cloud credentials are correctly set in the `GOOGLE_APPLICATION_CREDENTIALS` environment variable.
+
+### Terraform Apply Skipped
+If `apply_status` is `skipped`, this means Terraform detected no infrastructure changes. This is expected behavior when no updates are required.
 
 ### Workdir Not Found
 Make sure:
@@ -184,8 +177,8 @@ Make sure:
 - Your Terraform configuration exists in the specified directory.
 
 ### Debugging Secrets
-If Terraform is failing due to missing secrets:
-1. Check if the secret is missing in GitHub Actions.
+If Terraform fails due to missing secrets:
+1. Check if the secret exists in GitHub Secrets.
 2. Print secret values before running Terraform:
    ```yaml
    - name: Debug Secrets
@@ -245,5 +238,4 @@ For feature requests and issues, please open a GitHub Issue.
 ---
 
 ### Ready to use?
-Use `tf-plan-gcp` in your Terraform pipelines today. Star this repository if you find it useful.
-
+Use `tf-plan-apply-gcp` in your Terraform pipelines today. Star this repository if you find it useful.
