@@ -102,7 +102,7 @@ async function runTerraform() {
         const tfJson = JSON.parse(fs.readFileSync(jsonOutputPath, 'utf8'));
     
         // Extract all resource changes
-        const changes = tfJson.resource_changes || [];
+        const changes = tfJson.resource_changes ? tfJson.resource_changes.filter(change => change.change.actions.length > 0) : [];
         const changesCount = changes.length;
     
         // Categorize resources by action type
