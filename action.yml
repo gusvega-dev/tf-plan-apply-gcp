@@ -1,5 +1,5 @@
 name: "Terraform Plan GCP Action"
-description: "Executes Terraform Plan inside a container"
+description: "Run Terraform Plan and Apply in a containerized GitHub Action for GCP, built by Gus Vega. No Terraform install required"
 author: "gusvega"
 branding:
   icon: "cloud"
