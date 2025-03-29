@@ -26,7 +26,7 @@
   with:
     workdir: "./terraform"
     secrets: '{"project_id":"${{ secrets.PROJECT_ID }}"}'
-    apply: "true"
+    apply: "false"
 ```
 
 ### What This Does
@@ -144,7 +144,7 @@ jobs:
         with:
           workdir: "./terraform"
           secrets: '{"project_id":"${{ secrets.PROJECT_ID }}", "api_key":"${{ secrets.API_KEY }}"}'
-          apply: "true"
+          apply: "false"
 ```
 
 ### What This Does
