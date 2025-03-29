@@ -179,7 +179,7 @@ async function runTerraform() {
         // Set GitHub Actions outputs
         core.setOutput("resources_changed", changesCount);
         core.setOutput("change_details", JSON.stringify(changeCategories));
-        run_apply = core.getenv('apply').lower() || 'true';
+        const run_apply = core.getInput('apply').toLowerCase() || 'true';
         console.log(` Apply: ${run_apply}`);
 
         // Check if we need to apply
