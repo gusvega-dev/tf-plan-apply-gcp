@@ -179,10 +179,16 @@ async function runTerraform() {
         // Set GitHub Actions outputs
         core.setOutput("resources_changed", changesCount);
         core.setOutput("change_details", JSON.stringify(changeCategories));
+        run_apply = core.getenv('apply').lower() || 'true';
+        console.log(` Apply: ${run_apply}`);
 
         // Check if we need to apply
         if (changesCount === 0) {
             console.log("✅ No changes detected. Skipping Terraform Apply.");
+            core.setOutput("apply_status", "skipped");
+            return;
+        } else if (run_apply === "false") {
+            console.log("⚠️ 'run_apply' is set to 'false'. Skipping Terraform Apply.");
             core.setOutput("apply_status", "skipped");
             return;
         } else {
