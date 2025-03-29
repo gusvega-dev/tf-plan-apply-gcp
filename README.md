@@ -1,6 +1,6 @@
 # Terraform Plan + Apply GCP Action (`tf-plan-apply-gcp`)
 
-`tf-plan-apply-gcp` is a GitHub Action that runs `terraform plan` and `terraform apply` inside a containerized environment. It ensures seamless integration with Google Cloud workflows by executing Terraform operations securely and efficiently.
+**`tf-plan-apply-gcp`** is a GitHub Action that runs `terraform plan` and optionally `terraform apply` inside a containerized environment. It ensures seamless integration with Google Cloud workflows by executing Terraform operations securely and efficiently.
 
 ---
 
@@ -12,10 +12,11 @@
 - **Flexible Secret Passing** → Pass multiple secrets as an object and access them dynamically in Terraform.
 - **Works on Any GitHub Runner** → No dependency issues—run Terraform anywhere.
 - **Intelligent Apply Handling** → Skips `terraform apply` if no changes are detected.
+- **Apply Toggle** → Use `apply: false` to run plan-only mode.
 
 ---
 
-## Usage
+## Usage Example
 ### Basic Example
 ```yaml
 - name: Run Terraform Plan & Apply
@@ -25,6 +26,7 @@
   with:
     workdir: "./terraform"
     secrets: '{"project_id":"${{ secrets.PROJECT_ID }}"}'
+    apply: "true"
 ```
 
 ### What This Does
@@ -32,7 +34,8 @@
 - Uses Google Cloud credentials from GitHub Secrets.
 - Passes Terraform secrets dynamically as an object.
 - Displays structured Terraform logs inside GitHub Actions.
-- **Skips apply if no changes are detected.**
+- Skips apply if no changes are detected.
+- You can disable apply by setting `apply: false`.
 
 ---
 
@@ -41,16 +44,18 @@
 |------------|----------|---------|-------------|
 | `workdir`  | No       | `.`     | Working directory for Terraform execution. |
 | `secrets`  | No       | `{}`    | JSON object containing Terraform secrets. |
+| `apply`    | No       | `true`  | Whether to run `terraform apply` after a successful plan. |
 
 ### Example: Passing Multiple Secrets
 ```yaml
 - name: Run Terraform Plan & Apply
-  uses: gusvega-dev/tf-plan-apply-gcp@v1.0.0
+  uses: gusvega-dev/tf-plan-apply-gcp@v1.1.0
   env:
     GOOGLE_APPLICATION_CREDENTIALS: "${{ secrets.GCP_CREDENTIALS }}"
   with:
     workdir: "./terraform"
     secrets: '{"project_id":"${{ secrets.PROJECT_ID }}", "api_key":"${{ secrets.API_KEY }}"}'
+    apply: "false"
 ```
 
 ---
@@ -82,7 +87,7 @@ resource "some_resource" "example" {
 | Name           | Description |
 |---------------|-------------|
 | `plan_status` | The status of the Terraform Plan execution. |
-| `apply_status` | The status of the Terraform Apply execution (or `skipped` if no changes). |
+| `apply_status` | The status of the Terraform Apply execution (or `skipped` if no changes or disabled). |
 
 ---
 
@@ -135,10 +140,11 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Run Terraform Plan & Apply
-        uses: gusvega-dev/tf-plan-apply-gcp@v1.0.0
+        uses: gusvega-dev/tf-plan-apply-gcp@v1.1.0
         with:
           workdir: "./terraform"
           secrets: '{"project_id":"${{ secrets.PROJECT_ID }}", "api_key":"${{ secrets.API_KEY }}"}'
+          apply: "true"
 ```
 
 ### What This Does
@@ -146,7 +152,7 @@ jobs:
 - Ensures the Terraform directory is set correctly.
 - Uses Google Cloud credentials for authentication.
 - Passes secrets from GitHub Workflows to be used within Terraform.
-- Skips apply if no changes exist.
+- Skips apply if no changes exist or if `apply` is set to `false`.
 
 ---
 
@@ -159,6 +165,7 @@ jobs:
 | Structured Terraform Logs   | Yes | No |
 | Works on Any GitHub Runner  | Yes | No (Requires Terraform Installed) |
 | Skips Apply If No Changes   | Yes | No |
+| Optional Apply Toggle       | Yes | No |
 
 ---
 
@@ -169,7 +176,7 @@ Check the logs for errors:
 2. Verify Google Cloud credentials are correctly set in the `GOOGLE_APPLICATION_CREDENTIALS` environment variable.
 
 ### Terraform Apply Skipped
-If `apply_status` is `skipped`, this means Terraform detected no infrastructure changes. This is expected behavior when no updates are required.
+If `apply_status` is `skipped`, this means Terraform detected no infrastructure changes or you set `apply: false`. This is expected behavior.
 
 ### Workdir Not Found
 Make sure:
@@ -191,22 +198,24 @@ If Terraform fails due to missing secrets:
 ## Future Actions
 As part of a broader Terraform automation suite, additional actions will be developed, including:
 
-### **Infrastructure Provisioning & Deployment**
+### Infrastructure Provisioning & Deployment
 - Terraform Lint & Format
 - Security Scan
 - Cost Estimation
-- Apply Execution
+- [ Plan Validation ](https://github.com/marketplace/actions/terraform-plan-gcp-action)
+- [ Apply Execution ](https://github.com/marketplace/actions/terraform-apply-gcp-action)
+- [ Plan + Apply ](https://github.com/marketplace/actions/terraform-plan-and-apply-gcp-action)
 - State Backup
 - Post-Deployment Tests
 - Change Management Logging
 
-### **Drift Detection & Auto-Remediation**
+### Drift Detection & Auto-Remediation
 - Drift Detection
 - Auto-Remediation
 - Compliance Check
 - Manual Approval for Remediation
 
-### **CI/CD for Multi-Environment Deployments**
+### CI/CD for Multi-Environment Deployments
 - Validate Changes
 - Deploy to Dev
 - Integration Tests
@@ -215,7 +224,7 @@ As part of a broader Terraform automation suite, additional actions will be deve
 - Security Scan Before Prod
 - Deploy to Production
 
-### **Secret Management & Security Enforcement**
+### Secret Management & Security Enforcement
 - Secrets Detection
 - Secrets Rotation
 - IAM Policy Review
@@ -239,3 +248,4 @@ For feature requests and issues, please open a GitHub Issue.
 
 ### Ready to use?
 Use `tf-plan-apply-gcp` in your Terraform pipelines today. Star this repository if you find it useful.
+
