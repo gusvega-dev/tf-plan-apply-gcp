@@ -33,12 +33,13 @@ export function analysisPlan(plan) {
   };
 }
 
-export function configHash(dir) {
+export function configHash(dir, excludedDirectory) {
   const entries = [];
   function walk(current) {
     for (const entry of fs.readdirSync(current, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
       if (['.terraform', '.git', 'node_modules', '.terraform.lock.hcl'].includes(entry.name)) continue;
       const file = path.join(current, entry.name);
+      if (file === excludedDirectory) continue;
       if (entry.isSymbolicLink()) throw new Error('Symlinks in the Terraform directory are not supported.');
       if (entry.isDirectory()) walk(file);
       else if (/\.(tf|tf\.json|tfvars|tfvars\.json|hcl)$/.test(entry.name)) entries.push([path.relative(dir, file), sha256(read(file))]);
@@ -85,7 +86,7 @@ export function run(env = process.env) {
   const context = () => ({
     repository: env.GITHUB_REPOSITORY || 'local', commit: env.GITHUB_SHA || 'local',
     environment: input('ENVIRONMENT', 'dev'), projectId: input('PROJECT_ID'),
-    stateBucket, statePrefix, workspace, terraformVersion, configSha256: configHash(dir)
+    stateBucket, statePrefix, workspace, terraformVersion, configSha256: configHash(dir, bundle)
   });
   let manifest;
   if (mode === 'apply') {
