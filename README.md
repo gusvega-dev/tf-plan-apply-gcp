@@ -1,251 +1,100 @@
-# Terraform Plan + Apply GCP Action (`tf-plan-apply-gcp`)
+# Terraform GCP Actions v2
 
-**`tf-plan-apply-gcp`** is a GitHub Action that runs `terraform plan` and optionally `terraform apply` inside a containerized environment. It ensures seamless integration with Google Cloud workflows by executing Terraform operations securely and efficiently.
+One engine, three interfaces: `tf-plan-gcp`, `tf-apply-gcp` and
+`tf-plan-apply-gcp`. Linux GitHub runners with Node 22; exact Terraform 1.12.1
+by default, configurable identically for plan/apply. GCP authentication uses
+Workload Identity Federation or credentials already configured by the caller.
 
----
+## Contract
 
-## Features
-- **Containerized Execution** → Runs inside a prebuilt Docker container with Terraform installed.
-- **Automatic Directory Handling** → Works within your Terraform directory without manual setup.
-- **Structured Terraform Output** → Formats changes for better readability in GitHub logs.
-- **Google Cloud Credentials & Secrets Handling** → Reads authentication and Terraform secrets securely from GitHub Secrets.
-- **Flexible Secret Passing** → Pass multiple secrets as an object and access them dynamically in Terraform.
-- **Works on Any GitHub Runner** → No dependency issues—run Terraform anywhere.
-- **Intelligent Apply Handling** → Skips `terraform apply` if no changes are detected.
-- **Apply Toggle** → Use `apply: false` to run plan-only mode.
+- Default mode is plan. Plan includes fmt, validate and real state-aware planning.
+- Apply accepts only the saved binary plan, its manifest and a trusted manifest
+  SHA-256 from the producing job. It never generates a fresh plan.
+- Repository, commit, environment, project, workspace, backend bucket/prefix,
+  Terraform version, configuration and provider lock must match.
+- Plans expire after 24 hours. Terraform itself rejects stale state plans.
+- No raw Terraform/provider output is logged. The step summary contains counts
+  and a digest. The GuxOps JSON preserves resource changes while masking
+  Terraform-sensitive values and common secret field names.
+- Raw binary plans can contain secrets. They stay local by default. Upload them
+  only to a trusted private repository with short artifact retention. Sensitivity
+  masks cannot detect arbitrary unmarked secrets; review your variable schemas.
+- `approved: true` is an assertion by the calling workflow, not an approval
+  service. Put apply behind a protected GitHub environment or a verified GuxOps
+  approval. Do not derive the expected digest from an untrusted downloaded file.
+- Do not execute Terraform from untrusted PRs with write-capable credentials.
+  PR plan credentials must be read-only. Pin action references to full commits.
 
----
-
-## Usage Example
-### Basic Example
-```yaml
-- name: Run Terraform Plan & Apply
-  uses: gusvega-dev/tf-plan-apply-gcp@v1.1.0
-  env:
-    GOOGLE_APPLICATION_CREDENTIALS: "${{ secrets.GCP_CREDENTIALS }}"
-  with:
-    workdir: "./terraform"
-    secrets: '{"project_id":"${{ secrets.PROJECT_ID }}"}'
-    apply: "false"
-```
-
-### What This Does
-- Runs `terraform plan` inside the `./terraform` directory.
-- Uses Google Cloud credentials from GitHub Secrets.
-- Passes Terraform secrets dynamically as an object.
-- Displays structured Terraform logs inside GitHub Actions.
-- Skips apply if no changes are detected.
-- You can disable apply by setting `apply: false`.
-
----
-
-## Inputs
-| Name       | Required | Default | Description |
-|------------|----------|---------|-------------|
-| `workdir`  | No       | `.`     | Working directory for Terraform execution. |
-| `secrets`  | No       | `{}`    | JSON object containing Terraform secrets. |
-| `apply`    | No       | `true`  | Whether to run `terraform apply` after a successful plan. |
-
-### Example: Passing Multiple Secrets
-```yaml
-- name: Run Terraform Plan & Apply
-  uses: gusvega-dev/tf-plan-apply-gcp@v1.0.0
-  env:
-    GOOGLE_APPLICATION_CREDENTIALS: "${{ secrets.GCP_CREDENTIALS }}"
-  with:
-    workdir: "./terraform"
-    secrets: '{"project_id":"${{ secrets.PROJECT_ID }}", "api_key":"${{ secrets.API_KEY }}"}'
-    apply: "false"
-```
-
----
-
-## Using Secrets in Terraform
-The secrets passed to the action are automatically available in Terraform as environment variables prefixed with `TF_VAR_`.
-
-### Defining Secrets in Terraform (`variables.tf`)
-```hcl
-variable "secrets" {
-  type = map(string)
-}
-```
-
-### Accessing Secrets in Terraform (`main.tf`)
-```hcl
-provider "google" {
-  project = var.secrets["project_id"]
-}
-
-resource "some_resource" "example" {
-  api_key = var.secrets["api_key"]
-}
-```
-
----
-
-## Outputs
-| Name           | Description |
-|---------------|-------------|
-| `plan_status` | The status of the Terraform Plan execution. |
-| `apply_status` | The status of the Terraform Apply execution (or `skipped` if no changes or disabled). |
-
----
-
-## Handling Directory Structure
-GitHub Actions automatically mounts the repository into `/github/workspace` inside the container.
-
-- Terraform directory is set as:
-  ```sh
-  /github/workspace/terraform
-  ```
-- The action automatically switches to this directory.
-
----
-
-## Example: Repository Structure
-```
-repo-root/
-│── .github/
-│   ├── workflows/
-│   │   ├── terraform-plan-apply.yml  # GitHub Action Workflow
-│── terraform/
-│   ├── main.tf                 # Terraform Configuration
-│   ├── variables.tf            # Variables File
-│   ├── outputs.tf              # Outputs File
-│   ├── provider.tf             # Provider Configuration
-│── README.md                   # Documentation
-```
-
----
-
-## Full Terraform Workflow Example
-This is a complete Terraform CI/CD pipeline using `tf-plan-apply-gcp`:
+## Example (inside a trusted job)
 
 ```yaml
-name: Terraform CI
+permissions:
+  contents: read
+  id-token: write
 
-on:
-  push:
-    branches:
-      - main
-
-env:
-  GOOGLE_APPLICATION_CREDENTIALS: "${{ secrets.GCP_CREDENTIALS }}"
-
-jobs:
-  terraform-plan-apply:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: Run Terraform Plan & Apply
-        uses: gusvega-dev/tf-plan-apply-gcp@v1.0.0
-        with:
-          workdir: "./terraform"
-          secrets: '{"project_id":"${{ secrets.PROJECT_ID }}", "api_key":"${{ secrets.API_KEY }}"}'
-          apply: "false"
+steps:
+  - uses: actions/checkout@v5
+  - id: plan
+    uses: gusvega-dev/tf-plan-gcp@v2.0.0
+    with:
+      workdir: infra/terraform
+      plan-directory: ${{ runner.temp }}/reviewed-plan
+      state-bucket: ${{ vars.GCP_TERRAFORM_STATE_BUCKET }}
+      state-prefix: infra
+      environment: dev
+      project-id: ${{ vars.GCP_PROJECT_ID }}
+      workload-identity-provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+      service-account: ${{ vars.GCP_PLAN_SERVICE_ACCOUNT }}
+    env:
+      TF_VAR_project_id: ${{ vars.GCP_PROJECT_ID }}
+  # In production, transfer the bundle by immutable artifact ID to an apply job
+  # gated by a protected environment, passing this job's digest through needs.
+  - uses: gusvega-dev/tf-apply-gcp@v2.0.0
+    with:
+      workdir: infra/terraform
+      plan-directory: ${{ runner.temp }}/reviewed-plan
+      state-bucket: ${{ vars.GCP_TERRAFORM_STATE_BUCKET }}
+      state-prefix: infra
+      environment: dev
+      project-id: ${{ vars.GCP_PROJECT_ID }}
+      approved: 'true'
+      expected-manifest-sha256: ${{ steps.plan.outputs.manifest-sha256 }}
 ```
 
-### What This Does
-- Automatically runs Terraform Plan & Apply when pushing to `main`.
-- Ensures the Terraform directory is set correctly.
-- Uses Google Cloud credentials for authentication.
-- Passes secrets from GitHub Workflows to be used within Terraform.
-- Skips apply if no changes exist or if `apply` is set to `false`.
+See `action.yml` for all inputs. Outputs: `has-changes`, `plan-sha256`,
+`manifest-sha256`, `plan-directory`, `plan-json`, `plan_status`,
+`apply_status`, and legacy `plan-apply_status`.
 
----
+`destroy-plan` creates a reviewed destruction plan. Apply it using the same
+apply contract. `validate` initializes the configured backend and validates
+without planning. The action does not create workspaces or state buckets.
+Existing GuxOps GKE applications intentionally share `infra` state across
+Kubernetes namespaces; separate infrastructure stacks need separate prefixes.
 
-## Comparison vs. HashiCorp Terraform Action
-| Feature                     | `tf-plan-apply-gcp` (This Action) | HashiCorp Action |
-|-----------------------------|----------------------|------------------|
-| Requires Terraform Install  | No (Containerized) | Yes |
-| Native GCP Support          | Yes | No |
-| Flexible Secret Handling    | Yes (JSON object) | No |
-| Structured Terraform Logs   | Yes | No |
-| Works on Any GitHub Runner  | Yes | No (Requires Terraform Installed) |
-| Skips Apply If No Changes   | Yes | No |
-| Optional Apply Toggle       | Yes | No |
+## Migration from v1
 
----
+v1's `apply: true` and JSON `secrets` input fail with migration guidance.
+Use `mode: apply` with a saved bundle and `TF_VAR_*` environment variables.
+The plan/apply wrappers select their mode. No Docker image, GHCR write, bundled
+credentials or npm runtime dependencies are needed in v2. Existing v1 tags are
+left unchanged; upgrade consumers explicitly.
 
-## Troubleshooting
-### Terraform Plan Fails
-Check the logs for errors:
-1. Check for syntax issues in your Terraform files.
-2. Verify Google Cloud credentials are correctly set in the `GOOGLE_APPLICATION_CREDENTIALS` environment variable.
+## GuxOps
 
-### Terraform Apply Skipped
-If `apply_status` is `skipped`, this means Terraform detected no infrastructure changes or you set `apply: false`. This is expected behavior.
+Upload only `steps.plan.outputs.plan-json` as `ai-infra-terraform-plan`
+for PR risk analysis. The binary bundle is a separate private deployment
+artifact. GuxOps remains responsible for deterministic policy and approval;
+the actions execute Terraform. `ai-tool-test` exercises all three interfaces
+using `terraform_data`, with no cloud resources. WIF verification performs
+only a read of the existing project.
 
-### Workdir Not Found
-Make sure:
-- The `workdir` input is set to the correct path inside your repository.
-- Your Terraform configuration exists in the specified directory.
+## Development and release
 
-### Debugging Secrets
-If Terraform fails due to missing secrets:
-1. Check if the secret exists in GitHub Secrets.
-2. Print secret values before running Terraform:
-   ```yaml
-   - name: Debug Secrets
-     run: echo "Project ID: ${{ secrets.PROJECT_ID }}"
-   ```
-3. Ensure secrets are passed as a JSON object to the action.
+`npm ci && npm test && npm run test:integration` runs unit and real Terraform
+tests. Integration tests create only local `terraform_data` state and remove
+it. CI runs on PRs and main. Release only a new exact `v2.x.y` tag after CI;
+the release workflow tests first, creates a GitHub release and never force-moves
+tags or overwrites container images. Consumers pin full commit SHAs.
 
----
-
-## Future Actions
-As part of a broader Terraform automation suite, additional actions will be developed, including:
-
-### Infrastructure Provisioning & Deployment
-- Terraform Lint & Format
-- Security Scan
-- Cost Estimation
-- [ Plan Validation ](https://github.com/marketplace/actions/terraform-plan-gcp-action)
-- [ Apply Execution ](https://github.com/marketplace/actions/terraform-apply-gcp-action)
-- [ Plan + Apply ](https://github.com/marketplace/actions/terraform-plan-and-apply-gcp-action)
-- State Backup
-- Post-Deployment Tests
-- Change Management Logging
-
-### Drift Detection & Auto-Remediation
-- Drift Detection
-- Auto-Remediation
-- Compliance Check
-- Manual Approval for Remediation
-
-### CI/CD for Multi-Environment Deployments
-- Validate Changes
-- Deploy to Dev
-- Integration Tests
-- Manual Approval for Staging
-- Deploy to Staging
-- Security Scan Before Prod
-- Deploy to Production
-
-### Secret Management & Security Enforcement
-- Secrets Detection
-- Secrets Rotation
-- IAM Policy Review
-- Dynamic Secrets Management
-
-Stay tuned for updates as these become available.
-
---- 
-
-## License
-This project is licensed under the MIT License.
-
----
-
-## Author
-Maintained by Gus Vega: [@gusvega](https://github.com/gusvega)
-
-For feature requests and issues, please open a GitHub Issue.
-
----
-
-### Ready to use?
-Use `tf-plan-apply-gcp` in your Terraform pipelines today. Star this repository if you find it useful.
-
+[Roadmap decisions](docs/roadmap.md) explain which old proposed actions are
+capabilities, workflow stages or deferred integrations.

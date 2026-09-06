@@ -21,6 +21,9 @@ logs/
 *.tfstate
 *.tfstate.backup
 .terraform/
+.terraform-action-plan/
+tfplan
+gha-creds-*.json
 .terraform.lock.hcl
 
 # Docker-related files
