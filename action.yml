@@ -1,28 +1,124 @@
-name: "Terraform Plan and Apply GCP Action"
-description: "Run Terraform Plan and Apply in a containerized GitHub Action for GCP, built by Gus Vega. No Terraform install required"
-author: "gusvega"
+name: Terraform Plan and Apply GCP
+description: Plan by default; apply only a verified saved plan. Shared GuxOps Terraform engine.
+author: gusvega
 branding:
-  icon: "cloud"
-  color: "red"
-
+  icon: cloud
+  color: red
 inputs:
+  mode:
+    description: "validate, plan, destroy-plan, or apply. Apply never creates a new plan."
+    required: false
+    default: "plan"
   workdir:
-    description: "Working directory for Terraform"
+    description: "Terraform root directory."
     required: false
     default: "."
+  terraform-version:
+    description: "Exact Terraform version; plan and apply must match."
+    required: false
+    default: "1.12.1"
+  plan-directory:
+    description: "New directory for the saved plan bundle."
+    required: false
+    default: ".terraform-action-plan"
+  state-bucket:
+    description: "Existing GCS backend bucket; empty uses the configured backend."
+    required: false
+    default: ""
+  state-prefix:
+    description: "Explicit GCS state prefix. Existing GuxOps apps share infra across namespaces."
+    required: false
+    default: "infra"
+  workspace:
+    description: "Existing Terraform workspace."
+    required: false
+    default: "default"
+  environment:
+    description: "Logical deployment environment bound to the plan."
+    required: false
+    default: "dev"
+  project-id:
+    description: "GCP project bound to the plan; pass module variables via TF_VAR_."
+    required: false
+    default: ""
+  workload-identity-provider:
+    description: "Optional Google WIF provider; requires id-token: write."
+    required: false
+    default: ""
+  service-account:
+    description: "Optional service account to impersonate with WIF."
+    required: false
+    default: ""
+  approved:
+    description: "Set true only after the workflow approval gate."
+    required: false
+    default: "false"
+  expected-manifest-sha256:
+    description: "Trusted plan job manifest digest, required for apply."
+    required: false
+    default: ""
+  apply:
+    description: "Removed v1 behavior; true fails with migration guidance."
+    required: false
+    default: "false"
   secrets:
-    description: "JSON string containing secrets"
+    description: "Removed v1 secret JSON; use TF_VAR_ environment variables."
     required: false
     default: "{}"
-  apply:
-    description: 'Whether to run terraform apply after plan'
-    required: false
-    default: 'true'
-
 outputs:
+  has-changes:
+    description: has-changes
+    value: ${{ steps.engine.outputs['has-changes'] }}
+  plan-sha256:
+    description: plan-sha256
+    value: ${{ steps.engine.outputs['plan-sha256'] }}
+  manifest-sha256:
+    description: manifest-sha256
+    value: ${{ steps.engine.outputs['manifest-sha256'] }}
+  plan-directory:
+    description: plan-directory
+    value: ${{ steps.engine.outputs['plan-directory'] }}
+  plan-json:
+    description: plan-json
+    value: ${{ steps.engine.outputs['plan-json'] }}
+  plan_status:
+    description: plan_status
+    value: ${{ steps.engine.outputs['plan_status'] }}
+  apply_status:
+    description: apply_status
+    value: ${{ steps.engine.outputs['apply_status'] }}
   plan-apply_status:
-    description: "Terraform Plan execution status"
-
+    description: plan-apply_status
+    value: ${{ steps.engine.outputs['plan-apply_status'] }}
 runs:
-  using: "docker"
-  image: "docker://ghcr.io/gusvega-dev/tf-plan-apply-gcp:v1.0.0"
+  using: composite
+  steps:
+    - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+      with:
+        node-version: '22'
+    - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4
+      with:
+        terraform_version: ${{ inputs.terraform-version }}
+        terraform_wrapper: false
+    - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
+      if: ${{ inputs.workload-identity-provider != '' }}
+      with:
+        workload_identity_provider: ${{ inputs.workload-identity-provider }}
+        service_account: ${{ inputs.service-account }}
+    - id: engine
+      shell: bash
+      env:
+        ACTION_DIRECTORY: ${{ github.action_path }}
+        TF_ACTION_MODE: ${{ inputs.mode }}
+        TF_ACTION_WORKDIR: ${{ inputs.workdir }}
+        TF_ACTION_PLAN_DIRECTORY: ${{ inputs.plan-directory }}
+        TF_ACTION_STATE_BUCKET: ${{ inputs.state-bucket }}
+        TF_ACTION_STATE_PREFIX: ${{ inputs.state-prefix }}
+        TF_ACTION_WORKSPACE: ${{ inputs.workspace }}
+        TF_ACTION_ENVIRONMENT: ${{ inputs.environment }}
+        TF_ACTION_PROJECT_ID: ${{ inputs.project-id }}
+        TF_ACTION_APPROVED: ${{ inputs.approved }}
+        TF_ACTION_EXPECTED_MANIFEST_SHA256: ${{ inputs.expected-manifest-sha256 }}
+        TF_ACTION_LEGACY_APPLY: ${{ inputs.apply }}
+        TF_ACTION_SECRETS: ${{ inputs.secrets }}
+      run: node "$ACTION_DIRECTORY/src/engine.mjs"

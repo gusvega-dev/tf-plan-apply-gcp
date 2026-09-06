@@ -1,10 +1,8 @@
 {
   "name": "tf-plan-apply-gcp",
-  "version": "1.0.0",
-  "description": "GitHub Action for fast Terraform Plan and Apply execution",
-  "main": "index.js",
-  "dependencies": {
-    "@actions/core": "^1.10.0",
-    "@actions/exec": "^1.1.1"
-  }
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": { "test": "node --test test/*.test.mjs", "test:integration": "node --test test/*.integration.mjs" },
+  "engines": { "node": ">=22" }
 }
